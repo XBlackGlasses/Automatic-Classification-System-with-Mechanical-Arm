@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-Created on Tue Aug  4 17:20:52 2020
+Created on Tue Oct  6 12:43:22 2020
 
-@author: user
+@author: BLKGlasses
 """
+
 import pyrealsense2 as rs
 import numpy as np
 import cv2
@@ -13,7 +14,7 @@ import paho.mqtt.client as mqtt
 import json
 import os
 client = None
-MQTT_SERVER = '10.10.10.165'
+MQTT_SERVER = '192.168.1.165'
 MQTT_PORT = 1883  
 MQTT_ALIVE = 60 
 def arm_distance():
@@ -136,6 +137,7 @@ def arm_distance():
         #time.sleep(0.1)
     return depth
 Text = ''
+Obj_name=''
 def on_connect(client, userdata, flags, rc):
     print("Connected with result code "+str(rc))
     #client.subscribe("position")
@@ -149,21 +151,34 @@ def on_message(client, userdata, msg):
         #client.disconnect()
         detect(json.loads(Text))
   #if msg.topic=='end':
+    if msg.topic == 'speech':
+        global Obj_name
+        Obj_name = msg.payload.decode('utf8')
+        get = 1
+        if Obj_name.find('塑膠類') != -1 or Obj_name.find('plastic') != -1 or Obj_name.find('塑膠') != -1:
+            Obj_name = 'plastic'
+        elif Obj_name.find('鐵鋁罐') != -1 or Obj_name.find('tin_aluminum_can') != -1 or Obj_name.find('鐵罐') != -1 :
+            Obj_name = 'tin_aluminum_can'
+        elif Obj_name.find('鋁箔包') != -1 or Obj_name.find('drink_carton') != -1 or Obj_name.find('鋁箔類') != -1:
+            Obj_name = 'drink_carton'
+        elif Obj_name.find('紙板') != -1 or Obj_name.find('paper_cardboard') != -1 or Obj_name.find('紙類') != -1:
+            Obj_name = 'paper_cardboard'
+        else:
+            Obj_name = '不知道的類別'
+            get = 0;
+        if get:
+            print("抓取目標:" + Obj_name)
+            detect([{"finish": 123}])
+        else:
+            print("請輸入正確類別")
       
-def test(Text):
-    global client
-    client = mqtt.Client()  
-    client.connect(MQTT_SERVER, MQTT_PORT, MQTT_ALIVE) 
-    detect(Text)
-    
-    client.on_connect = on_connect
-    client.on_message = on_message
-    client.loop_forever()
 def myKey(e):
     return e['locx']
 
 def detect(Text):
     global client
+    global Obj_name
+    print('in detect')
     # Configure depth and color strreams
     print(Text[0]['finish'])
     #相機定位  => arm_distance  
@@ -210,7 +225,6 @@ def detect(Text):
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     video = cv2.VideoWriter('./realsense.mp4', fourcc,fps,sz)
     while (True):  
-        '''繼電器控制'''
         
         client.publish('carrier', '0', qos=1)
         frames = pipeline.wait_for_frames()
@@ -314,9 +328,15 @@ def detect(Text):
         """for a in list:
             if a['obj']=='label':
                 list.remove(a)"""
-        list.sort(reverse=True,key=myKey)
+        print('origin：' + json.dumps(list))
         
-        print(json.dumps(list))
+        #刪除非目標label
+        for i in list:
+            if i['obj'] != Obj_name:
+                list.remove(i)
+    
+        list.sort(reverse=True,key=myKey)
+        print('after：'+ json.dumps(list))
         #MQTT
         
         if on_public == False:
@@ -325,10 +345,7 @@ def detect(Text):
                 client.publish(MQTT_TOPIC1, json.dumps(list), qos=1)
                 on_public = True
                 cv2.destroyAllWindows()
-                #break
-                client.on_connect = on_connect
-                client.on_message = on_message
-                client.loop_forever() 
+                break
         elif Text[0]['finish']=="Finish":
             on_public = False
         #time.sleep(1)
@@ -347,19 +364,12 @@ def detect(Text):
         #time.sleep(0.1)
     
 if __name__ == '__main__':
-    """直接給予物件名稱"""
-    #detect('bottle')
-    #detect(".")
-    """MQTT傳遞物件信息"""
-    
+
     client = mqtt.Client()  
     client.connect(MQTT_SERVER, MQTT_PORT, MQTT_ALIVE)
     client.on_connect = on_connect
-    """
     client.on_message = on_message
-    client.publish('finish',json.dumps([{"finish":"finish"}]),qos=1)
-    client.loop_forever() """
-    #test([{"finish":123}])
-    detect([{"finish":123}])
+    client.loop_forever() 
+
    
     

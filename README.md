@@ -12,3 +12,5 @@
   + IOT控制
 
 物件偵測 -> 座標計算 -> MQTT傳送座標 -> 手臂移動定位 -> cam2邊緣偵測 -> 抓取物品
+
+>Kinova Gen3 ROS：https://github.com/Kinovarobotics/kortex
